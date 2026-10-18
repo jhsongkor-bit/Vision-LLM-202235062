@@ -40,6 +40,4 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 | `01_Linux-and-Python.ipynb` | 1회차 실습 |
 | `02_Computer-Vision.ipynb` | 2~4회차 실습 |
 | `README.md` | 저장소 소개 |
-| `kalman_filter.py` |  |
-| `hand.py` |  |
-| `hand_and_finger.py` |  |
+| `kalman_filter.py`, `hand.py`, `hand_and_finger.py` | Kalman filter를 이용한 움직임 추적 및 손·손가락 움직임 검출 실습 코드|
