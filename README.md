@@ -36,6 +36,7 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 | `26xxxx/README.md` | 해당일 과제 설명 및 실행 방법 |
 | `assignment01.py` | 과제 코드 |
 | `src/` | 소스 코드 폴더 |
+| `.gitignore` | 불필요 파일/폴더 무시 |
 | `00_Initial-Setup.ipynb` | 환경 설정 실습 |
 | `01_Linux-and-Python.ipynb` | 1회차 실습 |
 | `02_Computer-Vision.ipynb` | 2~4회차 실습 |
