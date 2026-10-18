@@ -63,7 +63,7 @@ if len(contours) > 0:
         thickness=cv2.FILLED
     )
 
-  # 가장 큰 contour만 채운 binary mask를 반투명 초록색으로 overlay
+    # 가장 큰 contour만 채운 binary mask를 반투명 초록색으로 overlay
     mask_color = np.zeros_like(final_img)
     mask_color[:, :, 1] = final_mask
     alpha = 0.35
@@ -74,4 +74,5 @@ if len(contours) > 0:
 
 plt.imshow(final_img)
 plt.title('Final Basketball Result')
-plt.axis("off");
+plt.axis("off")
+plt.show()
