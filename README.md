@@ -18,6 +18,13 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 │   ├── README.md
 │   ├── assignment01.py
 │   └── optional_files.py
+├── 261017/
+│   ├── README.md
+│   ├── assignment02.py
+│   └── optional_files.py
+├── Project01/
+│   ├── README.md
+│   ├── project01.py
 ├── src/
 ├── 00_Initial-Setup.ipynb
 ├── 01_Linux-and-Python.ipynb
@@ -32,9 +39,8 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 
 | 파일 및 폴더 | 설명 |
 |---|---|
-| `26xxxx/` | 26년 xx월 xx일 실습 및 과제 |
-| `26xxxx/README.md` | 해당일 과제 설명 및 실행 방법 |
-| `assignment01.py` | 과제 코드 |
+| `26xxxx/` | 26년 xx월 xx일 실습 및 과제 폴더 |
+| `Project` | 프로젝트 폴더 코드 |
 | `src/` | 소스 코드 폴더 |
 | `.gitignore` | 불필요 파일/폴더 무시 |
 | `00_Initial-Setup.ipynb` | 환경 설정 실습 |
