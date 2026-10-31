@@ -2,10 +2,6 @@
 
 **202235062 송중현**
 
-## 실습 02
-
-실습 02 파일의 history 에서 실습 당일 버전을 확인할 수 있습니다.
-
 ## Repository 소개
 
 Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입니다.
@@ -17,11 +13,12 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 ├── 261010/
 │   ├── README.md
 │   ├── assignment01.py
-│   └── optional_files.py
 ├── 261017/
 │   ├── README.md
 │   ├── assignment02.py
-│   └── optional_files.py
+├── 261025/
+│   ├── README.md
+│   ├── assignment03.py
 ├── Project01/
 │   ├── README.md
 │   ├── project01.py
