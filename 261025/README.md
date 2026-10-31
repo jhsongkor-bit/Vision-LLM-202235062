@@ -2,7 +2,8 @@
 
 ## 파일 구조
 
-- **Assignment03.py**: 코드 동작 파일
+- **Assignment03.py**: 3번 실습 G 5번 코드 동작 파일
+- **Assignment03-2.py**: 3번 실습 F 16-17번 코드 동작 파일
 
 <br>
 
