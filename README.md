@@ -18,7 +18,10 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 │   ├── assignment02.py
 ├── 261025/
 │   ├── README.md
-│   ├── assignment03.py
+│   ├── assignment03_cifar.py
+│   ├── assignment03_cupy.py
+│   ├── assignment03_iou_nms.py
+│   ├── assignment03_mnist.py
 ├── Project01/
 │   ├── README.md
 │   ├── project01.py
@@ -30,9 +33,11 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 ├── 01_Linux-and-Python.ipynb
 ├── 02_Computer-Vision.ipynb
 ├── 03_DL-and-GPU.ipynb
+├── 04_DL-Object-Detection.ipynb
 ├── kalman_filter.py
 ├── hand.py
 ├── hand_and_finger.py
+├── yolo11n_camera.py
 └── README.md
 ```
 
@@ -47,6 +52,8 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 | `00_Initial-Setup.ipynb` | 환경 설정 실습 |
 | `01_Linux-and-Python.ipynb` | 1회차 실습 |
 | `02_Computer-Vision.ipynb` | 2~4회차 실습 |
-| `03_DL-and-GPU.ipynb` | 6회차 실습 |
+| `03_DL-and-GPU.ipynb` | 6~7회차 실습 |
+| `04_DL-Object-Detection.ipynb` | 7~8회차 실습 |
 | `README.md` | 저장소 소개 |
 | `kalman_filter.py`, `hand.py`, `hand_and_finger.py` | Kalman filter를 이용한 움직임 추적 및 손·손가락 움직임 검출 실습 코드|
+| `yolo11n_camera.py` | YOLO11n 모델 객체 검출 실습 코드 |
