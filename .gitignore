@@ -1,3 +1,4 @@
 # virtual environments
+.env
 .venv/
 src/models/**
