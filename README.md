@@ -29,11 +29,13 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 │   ├── dataset/
 │   ├── images/
 │   ├── models/
+├── .gitignore
 ├── 00_Initial-Setup.ipynb
 ├── 01_Linux-and-Python.ipynb
 ├── 02_Computer-Vision.ipynb
 ├── 03_DL-and-GPU.ipynb
 ├── 04_DL-Object-Detection.ipynb
+├── 05-LLM_and_Gemma.ipynb
 ├── kalman_filter.py
 ├── hand.py
 ├── hand_and_finger.py
@@ -54,6 +56,7 @@ Vision-LLM 수업에서 진행한 실습과 과제를 정리하는 Repository입
 | `02_Computer-Vision.ipynb` | 2~4회차 실습 |
 | `03_DL-and-GPU.ipynb` | 6~7회차 실습 |
 | `04_DL-Object-Detection.ipynb` | 7~8회차 실습 |
+| `05-LLM_and_Gemma.ipynb` | 8~9회차 실습 |
 | `README.md` | 저장소 소개 |
 | `kalman_filter.py`, `hand.py`, `hand_and_finger.py` | Kalman filter를 이용한 움직임 추적 및 손·손가락 움직임 검출 실습 코드|
 | `yolo11n_camera.py` | YOLO11n 모델 객체 검출 실습 코드 |
