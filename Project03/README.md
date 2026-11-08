@@ -14,7 +14,7 @@
 - **src/models/MediaPipe/hand_landmarker.task**: MediaPipe 손 랜드마크 인식 모델
 - **src/models/YOLO/yolo11n.pt**: YOLO11n 사전 학습 모델
 - **src/models/Gemma4/**: 로컬 Gemma GGUF 모델 및 이미지 입력용 mmproj
-- **src/models/Whisper/base.pt**: OpenAI Whisper base 모델 (첫 실행 때 자동 다운로드)
+- **whisper.cpp/models/ggml-base.bin**: 06번 실습과 같은 whisper.cpp 한국어 STT 모델
 - **src/models/Piper/**: 한국어 음성 합성용 Piper 모델
 <br>
 
@@ -74,8 +74,18 @@ python -m pip install --upgrade pip
 pip install ultralytics opencv-contrib-python torch torchvision matplotlib ipykernel
 pip install --no-deps mediapipe
 pip install absl-py flatbuffers sounddevice
-pip install transformers sentencepiece onnx onnxruntime onnxslim ml_dtypes coloredlogs humanfriendly protobuf huggingface_hub python-dotenv sounddevice openai-whisper
+pip install transformers sentencepiece onnx onnxruntime onnxslim ml_dtypes coloredlogs humanfriendly protobuf huggingface_hub python-dotenv sounddevice
 pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+Whisper는 06번 실습처럼 저장소 루트에 `whisper.cpp`를 받고 CPU 버전으로 빌드합니다. Linux/Jetson에서 저장소 루트 기준으로 실행합니다.
+
+```bash
+git clone https://github.com/ggml-org/whisper.cpp.git
+cd whisper.cpp
+cmake -B build-cpu
+cmake --build build-cpu --target whisper-cli -j4 --config Release
+sh ./models/download-ggml-model.sh base
+```
 
 Piper는 별도 가상환경을 사용합니다.
 
@@ -89,7 +99,7 @@ pip install piper-tts
 
 ### 아이디어 설명
 
-웹캠에 보이는 장면을 YOLO11n으로 탐지하고 결과를 JSON으로 구조화한 뒤, 로컬 Gemma가 객체 정보를 바탕으로 장면을 설명하는 Vision-LLM 시스템입니다. 사용자는 음성으로 질문하고, OpenAI Whisper가 한국어 음성을 텍스트로 변환하며, Gemma의 답변은 Piper가 음성으로 읽어줍니다.
+웹캠에 보이는 장면을 YOLO11n으로 탐지하고 결과를 JSON으로 구조화한 뒤, 로컬 Gemma가 객체 정보를 바탕으로 장면을 설명하는 Vision-LLM 시스템입니다. 사용자는 음성으로 질문하고, whisper.cpp가 한국어 음성을 텍스트로 변환하며, Gemma의 답변은 Piper가 음성으로 읽어줍니다.
 
 카메라 탐지와 음성 응답을 별도 프로세스로 실행하여 Gemma 추론 중에도 카메라 탐지를 계속할 수 있습니다. JSON 파일을 두 프로세스 사이의 데이터 전달 형식으로 사용합니다.
 
@@ -105,7 +115,7 @@ pip install piper-tts
 
 - 로컬 LLM: Gemma 4 E2B GGUF 모델을 `llama-cpp-python`으로 실행합니다. 탐지 결과에 없는 객체를 추측하지 않고 한국어 두 문장 이내로 답하도록 Prompt를 설정합니다.
 
-- STT: 기본 마이크에서 5초간 녹음하고 OpenAI Whisper base 모델로 한국어 음성을 텍스트로 변환합니다. 모델 파일이 없으면 첫 실행 때 `src/models/Whisper/base.pt`에 자동 다운로드합니다. Jetson에서는 CUDA가 사용 가능하면 자동으로 CUDA를 사용하고, 아니면 CPU를 사용합니다.
+- STT: 기본 마이크에서 5초간 녹음하고 06번 실습과 같은 `whisper-cli`를 `-m ggml-base.bin -f input.wav -l ko -nt` 옵션으로 실행해 한국어 음성을 텍스트로 변환합니다. Jetson에서는 CPU 빌드 경로 `whisper.cpp/build-cpu/bin/whisper-cli`를 사용합니다.
 
 - TTS: 별도 `.piper_venv`에서 한국어 Piper 모델로 Gemma 답변을 WAV로 생성하고 기본 재생 장치로 출력합니다.
 
@@ -129,9 +139,9 @@ pip install piper-tts
 
 ## 참고 사항
 
-06번 실습의 전체 처리 흐름과 YOLO 임계값, JSON 필드, Gemma Prompt 제약, Piper 음성 모델을 따릅니다. TensorRT `.engine`·CSI/GStreamer 입력은 아직 연결하지 않았으며, 기본 카메라는 OpenCV V4L2/DirectShow를 사용합니다. STT는 OpenAI Whisper Python 라이브러리를 사용하고, 마이크와 오디오 출력은 `sounddevice`를 사용합니다.
+06번 실습의 전체 처리 흐름과 Whisper.cpp CLI 옵션, YOLO 임계값, JSON 필드, Gemma Prompt 제약, Piper 음성 모델을 따릅니다. 녹음과 TTS 오디오 입출력은 Windows·Jetson 호환을 위해 `sounddevice`를 사용합니다. TensorRT `.engine`·CSI/GStreamer 입력은 아직 연결하지 않았으며, 기본 카메라는 OpenCV V4L2/DirectShow를 사용합니다.
 
-Gemma·YOLO·MediaPipe·Piper 모델은 저장소의 `src/models` 폴더에 있어야 합니다. Whisper base 모델은 `openai-whisper`가 첫 실행 때 `src/models/Whisper/base.pt`로 내려받습니다. 첫 실행에는 인터넷 연결이 필요하며, 이후에는 로컬 파일을 사용합니다. Jetson에서는 JetPack과 호환되는 PyTorch가 설치되어 있어야 합니다. 웹캠과 마이크를 연결한 실제 실행은 아직 확인하지 않았습니다.
+Gemma·YOLO·MediaPipe·Piper 모델은 저장소의 `src/models` 폴더에 있어야 합니다. Whisper 실행 파일과 `ggml-base.bin`은 저장소 루트의 `whisper.cpp` 폴더에 준비해야 합니다. 웹캠과 마이크를 연결한 실제 실행은 아직 확인하지 않았습니다.
 
 <br>
 

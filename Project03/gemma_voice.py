@@ -9,16 +9,14 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
-import torch
-import whisper as openai_whisper
 from llama_cpp import Llama
 
 
 # [Windows 포팅] 음성 입력 → STT → YOLO JSON Context → 로컬 Gemma → Piper TTS
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GEMMA = REPO_ROOT / "src" / "models" / "Gemma4" / "google_gemma-4-E2B-it-Q4_K_M.gguf"
-WHISPER_MODEL_DIR = REPO_ROOT / "src" / "models" / "Whisper"
-WHISPER_MODEL_NAME = "base"
+WHISPER_ROOT = REPO_ROOT / "whisper.cpp"
+WHISPER_MODEL = WHISPER_ROOT / "models" / "ggml-base.bin"
 DEFAULT_JSON = REPO_ROOT / "src" / "json" / "vision_data.json"
 PIPER_PYTHON = REPO_ROOT / ".piper_venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 PIPER_MODEL = REPO_ROOT / "src" / "models" / "Piper" / "ko_KR-kss-medium.onnx"
@@ -34,6 +32,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-tokens", type=int, default=150, help="Maximum Gemma response length.")
     parser.add_argument("--json", type=Path, default=DEFAULT_JSON, help="YOLO detection JSON path.")
     return parser.parse_args()
+
+
+def whisper_cli_path() -> Path:
+    if sys.platform == "win32":
+        candidates = (
+            WHISPER_ROOT / "build-cpu" / "bin" / "Release" / "whisper-cli.exe",
+            WHISPER_ROOT / "build-cpu" / "bin" / "whisper-cli.exe",
+            WHISPER_ROOT / "build" / "bin" / "Release" / "whisper-cli.exe",
+            WHISPER_ROOT / "build" / "bin" / "whisper-cli.exe",
+        )
+    else:
+        candidates = (
+            WHISPER_ROOT / "build-cpu" / "bin" / "whisper-cli",
+            WHISPER_ROOT / "build" / "bin" / "whisper-cli",
+        )
+    return next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
 
 
 def detections_to_text(json_path: Path) -> str:
@@ -67,15 +81,16 @@ def record_audio(seconds: float) -> None:
         wav_file.writeframes(pcm.tobytes())
 
 
-def transcribe(model: openai_whisper.Whisper) -> str:
-    # 한국어 음성 → 텍스트 변환 (OpenAI Whisper 사용)
-    result = model.transcribe(
-        str(INPUT_WAV),
-        language="ko",
-        fp16=model.device.type == "cuda",
-        beam_size=5,
+def transcribe() -> str:
+    # 한국어 음성 → 텍스트 변환 (whisper.cpp CLI 사용)
+    result = subprocess.run(
+        [str(whisper_cli_path()), "-m", str(WHISPER_MODEL), "-f", str(INPUT_WAV), "-l", "ko", "-nt"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
     )
-    return result["text"].strip()
+    return result.stdout.strip()
 
 
 def speak(text: str) -> None:
@@ -108,19 +123,13 @@ def speak(text: str) -> None:
 def main() -> int:
     args = parse_args()
     json_path = args.json if args.json.is_absolute() else REPO_ROOT / args.json
-    required = [DEFAULT_GEMMA, PIPER_PYTHON, PIPER_MODEL]
+    required = [DEFAULT_GEMMA, whisper_cli_path(), WHISPER_MODEL, PIPER_PYTHON, PIPER_MODEL]
     missing = [str(path) for path in required if not path.exists()]
     if missing:
         raise FileNotFoundError("Required local model/runtime files are missing:\n" + "\n".join(missing))
 
-    # 1) Whisper와 Gemma 모델 불러오기 (Whisper base는 없으면 첫 실행 때 다운로드)
-    whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Loading OpenAI Whisper ({whisper_device}) and Gemma (CPU)...")
-    whisper = openai_whisper.load_model(
-        WHISPER_MODEL_NAME,
-        device=whisper_device,
-        download_root=str(WHISPER_MODEL_DIR),
-    )
+    # 1) whisper.cpp 실행 파일과 모델 파일 확인
+    print("Loading whisper.cpp STT and Gemma (CPU)...")
     gemma = Llama(
         model_path=str(DEFAULT_GEMMA),
         n_gpu_layers=0,
@@ -143,7 +152,7 @@ def main() -> int:
         try:
             # 1) 사용자 음성 녹음 및 STT 처리
             record_audio(args.seconds)
-            question = transcribe(whisper)
+            question = transcribe()
             if not question:
                 print("음성을 인식하지 못했습니다. 다시 말씀해 주세요.")
                 continue

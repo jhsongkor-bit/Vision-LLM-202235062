@@ -8,13 +8,11 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
-import torch
-import whisper as openai_whisper
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WHISPER_MODEL_DIR = ROOT / "src" / "models" / "Whisper"
-WHISPER_MODEL_NAME = "base"
+WHISPER_ROOT = ROOT / "whisper.cpp"
+WHISPER_MODEL = WHISPER_ROOT / "models" / "ggml-base.bin"
 PIPER_MODEL = ROOT / "src" / "models" / "Piper" / "ko_KR-kss-medium.onnx"
 AUDIO_DIR = ROOT / "src" / "audio"
 INPUT_WAV = AUDIO_DIR / "input.wav"
@@ -27,8 +25,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seconds", type=float, default=5.0, help="Microphone recording length (default: 5 seconds).")
     parser.add_argument("--device", type=int, default=None, help="Input device index; default microphone if omitted.")
     parser.add_argument("--list-devices", action="store_true", help="List audio devices and exit.")
-    parser.add_argument("--whisper-device", choices=("auto", "cpu", "cuda"), default="auto")
     return parser.parse_args()
+
+
+def whisper_cli_path() -> Path:
+    if sys.platform == "win32":
+        candidates = (
+            WHISPER_ROOT / "build-cpu" / "bin" / "Release" / "whisper-cli.exe",
+            WHISPER_ROOT / "build-cpu" / "bin" / "whisper-cli.exe",
+            WHISPER_ROOT / "build" / "bin" / "Release" / "whisper-cli.exe",
+            WHISPER_ROOT / "build" / "bin" / "whisper-cli.exe",
+        )
+    else:
+        candidates = (
+            WHISPER_ROOT / "build-cpu" / "bin" / "whisper-cli",
+            WHISPER_ROOT / "build" / "bin" / "whisper-cli",
+        )
+    return next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
 
 
 def record_microphone(seconds: float, device: int | None) -> None:
@@ -55,21 +68,15 @@ def record_microphone(seconds: float, device: int | None) -> None:
         wav_file.writeframes(pcm.tobytes())
 
 
-def transcribe(whisper_device: str) -> str:
-    if whisper_device == "auto":
-        whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = openai_whisper.load_model(
-        WHISPER_MODEL_NAME,
-        device=whisper_device,
-        download_root=str(WHISPER_MODEL_DIR),
+def transcribe() -> str:
+    result = subprocess.run(
+        [str(whisper_cli_path()), "-m", str(WHISPER_MODEL), "-f", str(INPUT_WAV), "-l", "ko", "-nt"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
     )
-    result = model.transcribe(
-        str(INPUT_WAV),
-        language="ko",
-        fp16=model.device.type == "cuda",
-        beam_size=5,
-    )
-    return result["text"].strip()
+    return result.stdout.strip()
 
 
 def speak(text: str) -> None:
@@ -99,6 +106,10 @@ def main() -> int:
         print(sd.query_devices())
         print(f"Default devices [input, output]: {sd.default.device}")
         return 0
+    required = (whisper_cli_path(), WHISPER_MODEL)
+    missing = [str(path) for path in required if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("Required Whisper files are missing:\n" + "\n".join(missing))
     if args.seconds <= 0:
         raise ValueError("--seconds must be greater than zero.")
     if args.device is not None:
@@ -110,7 +121,7 @@ def main() -> int:
         print(f"Using the default microphone: {sd.query_devices(kind='input')['name']}")
 
     record_microphone(args.seconds, args.device)
-    recognized = transcribe(args.whisper_device)
+    recognized = transcribe()
     print("\nSTT result:")
     print(recognized if recognized else "(No speech recognized)")
     speech = recognized or "음성이 인식되지 않았습니다. 마이크 입력을 확인해 주세요."
