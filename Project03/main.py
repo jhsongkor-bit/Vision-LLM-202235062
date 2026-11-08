@@ -42,12 +42,46 @@ RECORD_SECONDS = 5.0
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Point at a book and hear its cover title read aloud.")
-    parser.add_argument("--camera", type=int, default=2, help="Camera index (default: 2).")
+    parser.add_argument("--camera", type=int, default=None, help="Camera index (default: 2 on Windows, 0 on Linux/Jetson).")
     parser.add_argument("--conf", type=float, default=0.25, help="YOLO detection confidence.")
     parser.add_argument("--iou", type=float, default=0.5, help="NMS IoU threshold (default: 0.5).")
     parser.add_argument("--hold-frames", type=int, default=8, help="Keep the last fingertip/book hit for missed frames.")
     parser.add_argument("--device", type=int, default=None, help="Microphone input device index; default microphone if omitted.")
     return parser.parse_args()
+
+
+def open_camera(camera_index: int) -> cv2.VideoCapture:
+    if platform.system() == "Linux":
+        pipeline = (
+            f"v4l2src device=/dev/video{camera_index} ! "
+            "video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! "
+            "videoconvert ! video/x-raw,format=BGR ! "
+            "queue leaky=downstream max-size-buffers=1 "
+            "max-size-bytes=0 max-size-time=0 ! "
+            "appsink drop=true max-buffers=1 sync=false"
+        )
+        camera = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        if camera.isOpened():
+            print(f"Camera: /dev/video{camera_index} via Project01 GStreamer pipeline")
+            return camera
+        camera.release()
+        camera = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
+        if camera.isOpened():
+            print(f"Camera: /dev/video{camera_index} via V4L2 fallback")
+            return camera
+        camera.release()
+        camera = cv2.VideoCapture(camera_index)
+        if camera.isOpened():
+            print(f"Camera index: {camera_index} via OpenCV fallback")
+        return camera
+
+    camera = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+    if not camera.isOpened():
+        camera.release()
+        camera = cv2.VideoCapture(camera_index)
+    if camera.isOpened():
+        print(f"Camera index: {camera_index}")
+    return camera
 
 
 def calculate_angle(p1, p2, p3) -> float:
@@ -541,6 +575,7 @@ def speak(text: str) -> None:
 
 def main() -> int:
     args = parse_args()
+    camera_index = args.camera if args.camera is not None else (2 if platform.system() == "Windows" else 0)
     if args.hold_frames < 0:
         raise ValueError("--hold-frames cannot be negative.")
     if not 0.0 < args.iou < 1.0:
@@ -587,14 +622,10 @@ def main() -> int:
             num_hands=1,
         )
     )
-    backend = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_V4L2
-    camera = cv2.VideoCapture(args.camera, backend)
-    if not camera.isOpened():
-        camera.release()
-        camera = cv2.VideoCapture(args.camera)
+    camera = open_camera(camera_index)
     if not camera.isOpened():
         hand_detector.close()
-        raise RuntimeError(f"Could not open camera {args.camera}.")
+        raise RuntimeError(f"Could not open camera {camera_index}.")
 
     book_class_ids = {class_id for class_id, name in yolo.names.items() if name.lower() == "book"}
     if not book_class_ids:
