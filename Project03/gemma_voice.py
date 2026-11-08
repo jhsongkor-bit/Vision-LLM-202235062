@@ -9,14 +9,16 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
-from faster_whisper import WhisperModel
+import torch
+import whisper as openai_whisper
 from llama_cpp import Llama
 
 
 # [Windows 포팅] 음성 입력 → STT → YOLO JSON Context → 로컬 Gemma → Piper TTS
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GEMMA = REPO_ROOT / "src" / "models" / "Gemma4" / "google_gemma-4-E2B-it-Q4_K_M.gguf"
-DEFAULT_WHISPER = REPO_ROOT / "src" / "models" / "Whisper" / "faster-whisper-base"
+WHISPER_MODEL_DIR = REPO_ROOT / "src" / "models" / "Whisper"
+WHISPER_MODEL_NAME = "base"
 DEFAULT_JSON = REPO_ROOT / "src" / "json" / "vision_data.json"
 PIPER_PYTHON = REPO_ROOT / ".piper_venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 PIPER_MODEL = REPO_ROOT / "src" / "models" / "Piper" / "ko_KR-kss-medium.onnx"
@@ -65,10 +67,15 @@ def record_audio(seconds: float) -> None:
         wav_file.writeframes(pcm.tobytes())
 
 
-def transcribe(model: WhisperModel) -> str:
-    # 한국어 음성 → 텍스트 변환 (whisper.cpp CLI 대신 faster-whisper 사용)
-    segments, _ = model.transcribe(str(INPUT_WAV), language="ko", vad_filter=False, beam_size=5)
-    return " ".join(segment.text.strip() for segment in segments).strip()
+def transcribe(model: openai_whisper.Whisper) -> str:
+    # 한국어 음성 → 텍스트 변환 (OpenAI Whisper 사용)
+    result = model.transcribe(
+        str(INPUT_WAV),
+        language="ko",
+        fp16=model.device.type == "cuda",
+        beam_size=5,
+    )
+    return result["text"].strip()
 
 
 def speak(text: str) -> None:
@@ -101,14 +108,19 @@ def speak(text: str) -> None:
 def main() -> int:
     args = parse_args()
     json_path = args.json if args.json.is_absolute() else REPO_ROOT / args.json
-    required = [DEFAULT_GEMMA, DEFAULT_WHISPER / "model.bin", DEFAULT_WHISPER / "config.json", PIPER_PYTHON, PIPER_MODEL]
+    required = [DEFAULT_GEMMA, PIPER_PYTHON, PIPER_MODEL]
     missing = [str(path) for path in required if not path.exists()]
     if missing:
         raise FileNotFoundError("Required local model/runtime files are missing:\n" + "\n".join(missing))
 
-    # 1) 인터넷 호출 없이 로컬 Whisper와 Gemma 모델 불러오기
-    print("Loading local Whisper (CPU) and Gemma (CPU)...")
-    whisper = WhisperModel(str(DEFAULT_WHISPER), device="cpu", compute_type="int8")
+    # 1) Whisper와 Gemma 모델 불러오기 (Whisper base는 없으면 첫 실행 때 다운로드)
+    whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Loading OpenAI Whisper ({whisper_device}) and Gemma (CPU)...")
+    whisper = openai_whisper.load_model(
+        WHISPER_MODEL_NAME,
+        device=whisper_device,
+        download_root=str(WHISPER_MODEL_DIR),
+    )
     gemma = Llama(
         model_path=str(DEFAULT_GEMMA),
         n_gpu_layers=0,

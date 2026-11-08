@@ -8,11 +8,13 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
-from faster_whisper import WhisperModel
+import torch
+import whisper as openai_whisper
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WHISPER_MODEL = ROOT / "src" / "models" / "Whisper" / "faster-whisper-base"
+WHISPER_MODEL_DIR = ROOT / "src" / "models" / "Whisper"
+WHISPER_MODEL_NAME = "base"
 PIPER_MODEL = ROOT / "src" / "models" / "Piper" / "ko_KR-kss-medium.onnx"
 AUDIO_DIR = ROOT / "src" / "audio"
 INPUT_WAV = AUDIO_DIR / "input.wav"
@@ -25,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seconds", type=float, default=5.0, help="Microphone recording length (default: 5 seconds).")
     parser.add_argument("--device", type=int, default=None, help="Input device index; default microphone if omitted.")
     parser.add_argument("--list-devices", action="store_true", help="List audio devices and exit.")
-    parser.add_argument("--whisper-device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument("--whisper-device", choices=("auto", "cpu", "cuda"), default="auto")
     return parser.parse_args()
 
 
@@ -54,12 +56,20 @@ def record_microphone(seconds: float, device: int | None) -> None:
 
 
 def transcribe(whisper_device: str) -> str:
-    if not (WHISPER_MODEL / "model.bin").is_file():
-        raise FileNotFoundError(f"Whisper model not found: {WHISPER_MODEL}")
-    compute_type = "int8" if whisper_device == "cpu" else "float16"
-    model = WhisperModel(str(WHISPER_MODEL), device=whisper_device, compute_type=compute_type)
-    segments, _ = model.transcribe(str(INPUT_WAV), language="ko", vad_filter=False, beam_size=5)
-    return " ".join(segment.text.strip() for segment in segments).strip()
+    if whisper_device == "auto":
+        whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = openai_whisper.load_model(
+        WHISPER_MODEL_NAME,
+        device=whisper_device,
+        download_root=str(WHISPER_MODEL_DIR),
+    )
+    result = model.transcribe(
+        str(INPUT_WAV),
+        language="ko",
+        fp16=model.device.type == "cuda",
+        beam_size=5,
+    )
+    return result["text"].strip()
 
 
 def speak(text: str) -> None:

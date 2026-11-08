@@ -16,10 +16,11 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import sounddevice as sd
+import torch
+import whisper as openai_whisper
 from PIL import Image, ImageDraw, ImageFont
 from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Gemma4ChatHandler
-from faster_whisper import WhisperModel
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from ultralytics import YOLO
@@ -30,7 +31,8 @@ YOLO_MODEL = ROOT / "src" / "models" / "YOLO" / "yolo11n.pt"
 HAND_MODEL = ROOT / "src" / "models" / "MediaPipe" / "hand_landmarker.task"
 GEMMA_MODEL = ROOT / "src" / "models" / "Gemma4" / "google_gemma-4-E2B-it-Q4_K_M.gguf"
 MMPROJ_MODEL = ROOT / "src" / "models" / "Gemma4" / "mmproj-google_gemma-4-E2B-it-f16.gguf"
-WHISPER_MODEL = ROOT / "src" / "models" / "Whisper" / "faster-whisper-base"
+WHISPER_MODEL_DIR = ROOT / "src" / "models" / "Whisper"
+WHISPER_MODEL_NAME = "base"
 PIPER_MODEL = ROOT / "src" / "models" / "Piper" / "ko_KR-kss-medium.onnx"
 PIPER_PYTHON = ROOT / ".piper_venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 INPUT_WAV = ROOT / "src" / "audio" / "book_question.wav"
@@ -388,7 +390,7 @@ def answer_from_title_only(llm: Llama, question: str, title: str) -> str:
     return answer or "이 책은 한 인물이 여러 사건을 겪으며 성장하는 이야기입니다."
 
 
-def transcribe_audio(whisper: WhisperModel, audio: np.ndarray) -> str:
+def transcribe_audio(whisper_model: openai_whisper.Whisper, audio: np.ndarray) -> str:
     sample_rate = 16000
     INPUT_WAV.parent.mkdir(parents=True, exist_ok=True)
     pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype("<i2")
@@ -397,12 +399,17 @@ def transcribe_audio(whisper: WhisperModel, audio: np.ndarray) -> str:
         wav_file.setsampwidth(2)
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(pcm.tobytes())
-    segments, _ = whisper.transcribe(str(INPUT_WAV), language="ko", vad_filter=False, beam_size=5)
-    return " ".join(segment.text.strip() for segment in segments).strip()
+    result = whisper_model.transcribe(
+        str(INPUT_WAV),
+        language="ko",
+        fp16=whisper_model.device.type == "cuda",
+        beam_size=5,
+    )
+    return result["text"].strip()
 
 
 def answer_voice_question(
-    whisper: WhisperModel,
+    whisper_model: openai_whisper.Whisper,
     llm: Llama,
     frame: np.ndarray,
     bbox: tuple[int, int, int, int] | None,
@@ -416,7 +423,7 @@ def answer_voice_question(
     try:
         suppress_input.set()
         statuses.put("STT 음성 인식 중...")
-        question = transcribe_audio(whisper, audio)
+        question = transcribe_audio(whisper_model, audio)
         if not question:
             results.put(("", "음성을 인식하지 못했어요. 다시 말씀해 주세요."))
             return
@@ -494,7 +501,7 @@ def answer_voice_question(
 
 
 def record_and_answer_worker(
-    whisper: WhisperModel,
+    whisper: openai_whisper.Whisper,
     llm: Llama,
     device: int | None,
     memory: dict,
@@ -585,8 +592,6 @@ def main() -> int:
         HAND_MODEL,
         GEMMA_MODEL,
         MMPROJ_MODEL,
-        WHISPER_MODEL / "model.bin",
-        WHISPER_MODEL / "config.json",
         PIPER_PYTHON,
         PIPER_MODEL,
     )
@@ -594,7 +599,7 @@ def main() -> int:
     if missing:
         raise FileNotFoundError("Required model/runtime files are missing:\n" + "\n".join(missing))
 
-    print("Loading YOLO, MediaPipe Hands, Whisper STT, and local Gemma Vision...")
+    print("Loading YOLO, MediaPipe Hands, OpenAI Whisper STT, and local Gemma Vision...")
     try:
         saved_memory = json.loads(BOOK_MEMORY_PATH.read_text(encoding="utf-8"))
         saved_title = saved_memory.get("title") if isinstance(saved_memory, dict) else None
@@ -605,7 +610,12 @@ def main() -> int:
     book_memory = {"title": saved_title}
     save_book_memory(book_memory)
     yolo = YOLO(str(YOLO_MODEL))
-    whisper = WhisperModel(str(WHISPER_MODEL), device="cpu", compute_type="int8")
+    whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
+    whisper_model = openai_whisper.load_model(
+        WHISPER_MODEL_NAME,
+        device=whisper_device,
+        download_root=str(WHISPER_MODEL_DIR),
+    )
     chat_handler = Gemma4ChatHandler(clip_model_path=str(MMPROJ_MODEL))
     llm = Llama(
         model_path=str(GEMMA_MODEL),
@@ -646,7 +656,7 @@ def main() -> int:
     worker = threading.Thread(
         target=record_and_answer_worker,
         kwargs={
-            "whisper": whisper,
+            "whisper": whisper_model,
             "llm": llm,
             "device": args.device,
             "memory": book_memory,
